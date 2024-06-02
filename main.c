@@ -34,11 +34,19 @@ void open_queues();
 
 void cleanup();
 
+void *send(void *arg);
+
+void *receive(void *arg);
+
 int main(void) {
     initialize();
     open_queues();
 
-
+    pthread_t sending, receiving;
+    pthread_create(&sending, NULL, send, NULL);
+    pthread_create(&receiving, NULL, receive, NULL);
+    pthread_join(sending, NULL);
+    pthread_join(receiving, NULL);
 
     cleanup();
     return 0;
@@ -117,9 +125,9 @@ void open_queues() {
     for (int i = 0; i < MAX_USERS; ++i) {
         if (pids[i] == 0) return;
         if (i == 0) {   // Set up the process's receiving queue
-            queues[i] = mq_open(queue_names[i], O_RDONLY | O_CREAT, 0644, &attr);
+            queues[i] = mq_open(queue_names[i], O_RDONLY | O_CREAT | O_NONBLOCK, 0644, &attr);
         } else {    // Set up the queues for sending messages
-            queues[i] = mq_open(queue_names[i], O_WRONLY | O_CREAT, 0644, &attr);
+            queues[i] = mq_open(queue_names[i], O_WRONLY | O_CREAT | O_NONBLOCK, 0644, &attr);
         }
     }
 }
@@ -131,4 +139,31 @@ void cleanup() {
         mq_close(queues[i]);
         mq_unlink(queue_names[i]);
     }
+}
+
+void *send(void *arg) {
+    while (running) {
+        printf("Send: ");
+        char msg[256];
+        fgets(msg, 256, stdin);
+        if (strcmp(msg, "exit\n") == 0) {
+            running = false;
+            break;
+        }
+        for (int i = 1; i < MAX_USERS; ++i) {
+            if (pids[i] == 0) break;
+            mq_send(queues[i], msg, 256, 0);
+        }
+    }
+    return NULL;
+}
+
+void *receive(void *arg) {
+    while (running) {
+        sleep(1);
+        char msg[256];
+        if (mq_receive(queues[0], msg, 256, 0) == -1) continue;
+        printf("Recieved: %s\n", msg);
+    }
+    return NULL;
 }
