@@ -10,9 +10,11 @@
 #include <string.h>
 
 #define PROC_FILE "processes.txt"
+#define CLEAR_SCREEN "\033[H\033[J"
 #define MAX_USERS 4
 #define TIMEOUT 5
 #define NAME_SIZE 16
+#define CHAT_SIZE 1024
 
 bool running = true;
 pid_t pid;
@@ -20,7 +22,14 @@ int pids[MAX_USERS] = {0};
 char *queue_names[MAX_USERS];
 mqd_t queues[MAX_USERS];
 
+struct screen {
+    char content[CHAT_SIZE];
+    int i;
+} screen;
+
 struct mq_attr attr;
+
+pthread_mutex_t mutex;
 
 void sign_in(pid_t pid);
 
@@ -38,7 +47,12 @@ void *send(void *arg);
 
 void *receive(void *arg);
 
+void screen_add(char *text);
+
+void screen_refresh();
+
 int main(void) {
+    pthread_mutex_init(&mutex, NULL);
     initialize();
     open_queues();
 
@@ -49,6 +63,7 @@ int main(void) {
     pthread_join(receiving, NULL);
 
     cleanup();
+    pthread_mutex_destroy(&mutex);
     return 0;
 }
 
@@ -143,13 +158,18 @@ void cleanup() {
 
 void *send(void *arg) {
     while (running) {
-        printf("Send: ");
+        sleep(1);
         char msg[256];
         fgets(msg, 256, stdin);
         if (strcmp(msg, "exit\n") == 0) {
             running = false;
             break;
         }
+        pthread_mutex_lock(&mutex);
+        screen_add("Send: ");
+        screen_add(msg);
+        screen_refresh();
+        pthread_mutex_unlock(&mutex);
         for (int i = 1; i < MAX_USERS; ++i) {
             if (pids[i] == 0) break;
             mq_send(queues[i], msg, 256, 0);
@@ -163,7 +183,23 @@ void *receive(void *arg) {
         sleep(1);
         char msg[256];
         if (mq_receive(queues[0], msg, 256, 0) == -1) continue;
-        printf("Recieved: %s\n", msg);
+        pthread_mutex_lock(&mutex);
+        screen_add("Received: ");
+        screen_add(msg);
+        screen_refresh();
+        pthread_mutex_unlock(&mutex);
     }
     return NULL;
+}
+
+void screen_add(char *text) {
+    for (int j = 0; j < strlen(text); ++j) {
+        screen.content[screen.i++] = text[j];
+    }
+}
+
+void screen_refresh() {
+    printf(CLEAR_SCREEN);
+    printf("%s", screen.content);
+    printf("Send: ");
 }
