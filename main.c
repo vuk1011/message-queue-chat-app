@@ -15,12 +15,14 @@
 #define TIMEOUT 5
 #define NAME_SIZE 16
 #define CHAT_SIZE 1024
+#define MSG_SIZE 256
 
 bool running = true;
 pid_t pid;
 int pids[MAX_USERS] = {0};
 char *queue_names[MAX_USERS];
 mqd_t queues[MAX_USERS];
+int others = 0;
 
 struct screen {
     char content[CHAT_SIZE];
@@ -68,8 +70,7 @@ int main(void) {
 }
 
 void sign_in(pid_t pid) {
-    // Writes the process's ID to the processes.txt file and asigns that value as the first element of pids[]
-    pids[0] = pid;
+    // Writes the process's ID to the processes.txt file
     int proc_file = open(PROC_FILE, O_WRONLY | O_CREAT | O_APPEND, 0644);
     flock(proc_file, LOCK_EX);
     dprintf(proc_file, "%d\n", pid);
@@ -112,13 +113,22 @@ void update_pids() {
     for (int j = 0; j < MAX_USERS; ++j) {
         if (arr[j] == pid) {
             continue;
+        } else if (arr[j] != 0) {
+            pids[i++] = arr[j];
+            others++;
         }
-        pids[i++] = arr[j];
+    }
+
+    if (others == MAX_USERS) {
+        printf("Error: Chat room is full.\n");
+        exit(0);
     }
 }
 
 void initialize() {
+    printf(CLEAR_SCREEN);
     pid = getpid();
+    pids[0] = pid;
     sign_in(pid);
     update_pids();
 
@@ -130,7 +140,7 @@ void initialize() {
     }
 
     // Initialize the mq_attr struct
-    attr.mq_msgsize = 256;
+    attr.mq_msgsize = MSG_SIZE;
     attr.mq_maxmsg = 8;
     attr.mq_flags = 0;
     attr.mq_curmsgs = 0;
@@ -154,17 +164,18 @@ void cleanup() {
         mq_close(queues[i]);
         mq_unlink(queue_names[i]);
     }
+    // Delete content of processes.txt if process is the last to leave
+    if (others == 0) {
+        int proc_file = open(PROC_FILE, O_WRONLY | O_TRUNC);
+        close(proc_file);
+    }
 }
 
 void *send(void *arg) {
     while (running) {
         sleep(1);
-        char msg[256];
-        fgets(msg, 256, stdin);
-        if (strcmp(msg, "exit\n") == 0) {
-            running = false;
-            break;
-        }
+        char msg[MSG_SIZE];
+        fgets(msg, MSG_SIZE, stdin);
         pthread_mutex_lock(&mutex);
         screen_add("Send: ");
         screen_add(msg);
@@ -172,7 +183,11 @@ void *send(void *arg) {
         pthread_mutex_unlock(&mutex);
         for (int i = 1; i < MAX_USERS; ++i) {
             if (pids[i] == 0) break;
-            mq_send(queues[i], msg, 256, 0);
+            mq_send(queues[i], msg, MSG_SIZE, 0);
+        }
+        if (strcmp(msg, "exit\n") == 0) {
+            running = false;
+            break;
         }
     }
     return NULL;
@@ -181,13 +196,16 @@ void *send(void *arg) {
 void *receive(void *arg) {
     while (running) {
         sleep(1);
-        char msg[256];
-        if (mq_receive(queues[0], msg, 256, 0) == -1) continue;
+        char msg[MSG_SIZE];
+        if (mq_receive(queues[0], msg, MSG_SIZE, 0) == -1) continue;
         pthread_mutex_lock(&mutex);
         screen_add("Received: ");
         screen_add(msg);
         screen_refresh();
         pthread_mutex_unlock(&mutex);
+        if (strcmp(msg, "exit\n") == 0) {
+            others--;
+        }
     }
     return NULL;
 }
