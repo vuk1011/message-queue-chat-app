@@ -2,11 +2,11 @@
 
 A C program that runs locally in multiple terminal windows that run it, enabling them to chat with each other.
 It demonstrates functionalities from the [*mqueue.h*](https://www.freertos.org/Documentation/api-ref/POSIX/mqueue_8h.html)
-header file from the [C POSIX library](https://en.wikipedia.org/wiki/C_POSIX_library).
+header file from the [*C POSIX library*](https://en.wikipedia.org/wiki/C_POSIX_library).
 
 ## Installing the code
 
-Copy the directory structure to a location of your choice.
+Copy the repository to a location of your choice.
 
 ```shell
 cd /some/empty/directory/
