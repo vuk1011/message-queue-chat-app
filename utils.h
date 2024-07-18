@@ -14,6 +14,8 @@ void sign_in(pid_t pid);
 
 void get_pids_from_file(int arr[]);
 
+void write_pids_to_file();
+
 void update_pids();
 
 void initialize();

@@ -6,6 +6,7 @@
 
 char username[USERNAME_LEN];
 pthread_mutex_t mutex;
+extern int pids[MAX_USERS];
 
 int main(int argc, char *argv[]) {
     if (argc == 2 && strlen(argv[1]) <= USERNAME_LEN) {
@@ -47,5 +48,6 @@ int main(int argc, char *argv[]) {
         printf("Error: destroying mutex\n");
         exit(EXIT_FAILURE);
     }
+
     return 0;
 }

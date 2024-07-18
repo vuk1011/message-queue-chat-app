@@ -91,20 +91,51 @@ void get_pids_from_file(int arr[]) {
     }
 }
 
+void write_pids_to_file() {
+    // Writes the values from pids[] to the file
+    int proc_file = open(PROC_FILE, O_WRONLY | O_TRUNC, 0644);
+    if (proc_file == -1) {
+        printf("Error: opening file %s\n", PROC_FILE);
+        exit(EXIT_FAILURE);
+    }
+    if (flock(proc_file, LOCK_EX) == -1) {
+        printf("Error: locking file %s\n", PROC_FILE);
+        close(proc_file);
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < MAX_USERS; ++i) {
+        if (pids[i] == 0 || pids[i] == pid) continue;
+        dprintf(proc_file, "%d\n", pids[i]);
+    }
+    if (flock(proc_file, LOCK_UN) == -1) {
+        printf("Error: unlocking file %s\n", PROC_FILE);
+        close(proc_file);
+        exit(EXIT_FAILURE);
+    }
+    if (close(proc_file) == -1) {
+        printf("Error: closing file %s\n", PROC_FILE);
+        exit(EXIT_FAILURE);
+    }
+}
+
 void update_pids() {
-    // Reads the pid's from processes.txt and updates the pids[] array accordingly
+    // Reads pid's from processes.txt and updates pids[]
     sleep(TIMEOUT);
     int arr[MAX_USERS] = {0};
     get_pids_from_file(arr);
 
     int i = 1;
+    others = 0;
     for (int j = 0; j < MAX_USERS; ++j) {
         if (arr[j] == pid) {
             continue;
         } else if (arr[j] != 0) {
             pids[i++] = arr[j];
             others++;
-        }
+        } else break;
+    }
+    while (i < MAX_USERS) {
+        pids[i++] = 0;
     }
 
     if (others == MAX_USERS) {
@@ -250,5 +281,10 @@ void cleanup() {
     if (others == 0) {
         int proc_file = open(PROC_FILE, O_WRONLY | O_TRUNC);
         close(proc_file);
+    }
+    // Remove its pid from the file
+    else {
+        update_pids();
+        write_pids_to_file();
     }
 }
